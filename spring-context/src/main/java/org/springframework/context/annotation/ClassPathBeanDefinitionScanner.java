@@ -268,22 +268,63 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 	 * but rather leaves this up to the caller.
 	 * @param basePackages the packages to check for annotated classes
 	 * @return set of beans registered if any for tooling registration purposes (never {@code null})
+	 *
+	 * jb)
+	 * 지정한 base package 아래에서 @Component, @Service, @Repository, @Controller 같은 클래스를 찾고,
+	 * 그 클래스를 BeanDefinition으로 만들어 BeanFactory에 등록하는 코드.
+	 *
+	 * → 후보 클래스 찾기
+	 * → BeanDefinition 생성
+	 * → BeanDefinitionRegistry에 등록
+	 *
+	 * 이 doScan 메서드가 끝나는 시점에도 실제 빈 객체는 단 하나도 생성되지 않음.
+	 * 메모리에는 오직 빈을 어떻게 만들어야 할지 기록된 BeanDefinition들만 존재.
+	 * 이 작업이 모두 끝난 후 BeanFactory가 이 설계도들을 바탕으로 앞서 살펴본 빈 생명주기(인스턴스화 → 의존성 주입 → 초기화)를 시작.
+	 *
+	 *
 	 */
 	protected Set<BeanDefinitionHolder> doScan(String... basePackages) {
 		Assert.notEmpty(basePackages, "At least one base package must be specified");
-		Set<BeanDefinitionHolder> beanDefinitions = new LinkedHashSet<>();
+		// BeanDefinitionHolder : BeanDefinition + beanName + aliases.
+		Set<BeanDefinitionHolder> beanDefinitions = new LinkedHashSet<>(); // LinkedHashSet: 중복 제거 + 등록 순서 유지
 		for (String basePackage : basePackages) {
+
+			/**
+			 * 가장 무겁고 중요한 작업이 일어나는 곳. 주어진 패키지 경로(basePackage)의 디렉토리를 스캔하여 @Component (또는 이를 메타 어노테이션으로 가지는 @Service, @Controller 등)가 붙은 클래스들을 찾음.
+			 * 이때 성능을 위해 클래스 로더(ClassLoader)를 통해 JVM 메모리에 클래스를 직접 로드하지 않음.
+			 * .class 파일의 바이트코드만 읽어내어 메타데이터(BeanDefinition) 객체로 반환.
+			 */
 			Set<BeanDefinition> candidates = findCandidateComponents(basePackage);
 			for (BeanDefinition candidate : candidates) {
+				/*
+				* 찾아낸 후보군 각각에 대해 속성을 부여.
+				* 스코프 결정: 클래스에 붙은 @Scope 어노테이션을 읽어 싱글톤(Singleton), 프로토타입(Prototype) 등의 스코프를 BeanDefinition에 세팅. (기본값은 singleton)
+				* 이름 생성: BeanNameGenerator를 통해 빈의 이름을 결정.
+				* 기본적으로 클래스 이름의 첫 글자를 소문자로 바꾼 카멜 케이스(CamelCase)를 사용함.
+				* */
 				ScopeMetadata scopeMetadata = this.scopeMetadataResolver.resolveScopeMetadata(candidate);
 				candidate.setScope(scopeMetadata.getScopeName());
 				String beanName = this.beanNameGenerator.generateBeanName(candidate, this.registry);
+
+				/*
+				* 객체를 생성할 때 필요한 추가적인 메타데이터를 파싱하여 BeanDefinition에 채워 넣음.
+				* processCommonDefinitionAnnotations 는 @Lazy, @Primary, @DependsOn, @Role, @Description 같은 공통 어노테이션들을 읽어 설계도에 반영하는 역할을 함.
+				 * */
 				if (candidate instanceof AbstractBeanDefinition abstractBeanDefinition) {
 					postProcessBeanDefinition(abstractBeanDefinition, beanName);
 				}
 				if (candidate instanceof AnnotatedBeanDefinition annotatedBeanDefinition) {
 					AnnotationConfigUtils.processCommonDefinitionAnnotations(annotatedBeanDefinition);
 				}
+
+				// 프록시 모드 적용 및 레지스트리 등록
+				/*
+				* 검증 (checkCandidate): 이미 같은 이름의 빈이 등록되어 있는지, 충돌이 발생하지 않는지 확인합니다.
+				* Scoped Proxy 적용: request나 session 스코프 빈을 singleton 빈에 주입할 때 발생하는 생명주기 불일치 문제를 해결하기 위해, 실제 객체 대신 주입할 가짜 프록시(Scoped Proxy)를 생성하도록 설정.
+				* ㄴ 이거 뭔소리인지 아직 잘 모르겠음.
+				* 레지스트리 등록 (registerBeanDefinition):
+				* 완성된 BeanDefinition을 스프링의 BeanDefinitionRegistry (일반적으로 DefaultListableBeanFactory) 내부의 ConcurrentHashMap에 저장합니다.
+				* */
 				if (checkCandidate(beanName, candidate)) {
 					BeanDefinitionHolder definitionHolder = new BeanDefinitionHolder(candidate, beanName);
 					definitionHolder =

@@ -122,6 +122,9 @@ import org.springframework.core.ResolvableType;
 public interface BeanFactory {
 
 	/**
+	 * jb) 일반 bean 이름으로 조회하면 FactoryBean이 만든 객체를 반환하고,
+	 * bean 이름 앞에 &를 붙여 조회하면 FactoryBean 자체를 반환한다.
+	 *
 	 * Used to dereference a {@link FactoryBean} instance and distinguish it from
 	 * beans <i>created</i> by the FactoryBean. For example, if the bean named
 	 * {@code myJndiObject} is a FactoryBean, getting {@code &myJndiObject}
@@ -232,6 +235,17 @@ public interface BeanFactory {
 	<T> T getBean(Class<T> requiredType, @Nullable Object @Nullable ... args) throws BeansException;
 
 	/**
+	 * jb) BeanFactory 또는 ApplicationContext에서 Bean을 바로 꺼내는 대신, 나중에 필요할 때 꺼낼 수 있는 Provider를 반환하는 메서드
+	 *
+	 * BeanFactory 또는 ApplicationContext에서 Bean을 바로 꺼내는 대신, 나중에 필요할 때 꺼낼 수 있는 Provider를 반환하는 메서드
+	 * 일반적인 getBean()은 즉시 Bean을 찾음.
+	 * OrderService orderService = context.getBean(OrderService.class);
+	 *
+	 * ObjectProvider<OrderService> provider =
+	 *         context.getBeanProvider(OrderService.class);
+	 * 이렇게 받아두고 나중에 선택적으로 사용할 수 있음.
+	 * OrderService orderService = provider.getIfAvailable();
+	 *
 	 * Return a provider for the specified bean, allowing for lazy on-demand retrieval
 	 * of instances, including availability and uniqueness options.
 	 * <p>For matching a generic type, consider {@link #getBeanProvider(ResolvableType)}.
@@ -307,6 +321,18 @@ public interface BeanFactory {
 	 * check for independent instances.
 	 * <p>Translates aliases back to the corresponding canonical bean name.
 	 * <p>Will ask the parent factory if the bean cannot be found in this factory instance.
+	 *
+	 * jb) @Scope("session"), @Scope("request") bean은 false를 반환함
+	 * 아래와 같은 scope들이 존재
+	 * singleton
+	 * prototype
+	 * request
+	 * session
+	 * application
+	 * websocket
+	 *
+	 *
+	 *
 	 * @param name the name of the bean to query
 	 * @return whether this bean corresponds to a singleton instance
 	 * @throws NoSuchBeanDefinitionException if there is no bean with the given name
