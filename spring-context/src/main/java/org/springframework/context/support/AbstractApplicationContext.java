@@ -577,6 +577,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		return this.applicationListeners;
 	}
 
+	// jb: B
 	@Override
 	public void refresh() throws BeansException, IllegalStateException {
 		this.startupShutdownLock.lock();
@@ -599,8 +600,13 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				postProcessBeanFactory(beanFactory);
 
 				StartupStep beanPostProcess = this.applicationStartup.start("spring.context.beans.post-process");
+				// jb: BeanFactoryPostProcessor / BeanDefinitionRegistryPostProcessor 실행 구간.
+				// ConfigurationClassPostProcessor도 여기서 동작하면서 추가 BeanDefinition을 등록할 수 있다.
 				// Invoke factory processors registered as beans in the context.
 				invokeBeanFactoryPostProcessors(beanFactory);
+
+				// jb: 이후 생성될 bean들에 개입할 BeanPostProcessor 등록.
+				// AOP auto proxy creator, @Autowired 처리기 등이 이 체인에 들어간다.
 				// Register bean processors that intercept bean creation.
 				registerBeanPostProcessors(beanFactory);
 				beanPostProcess.end();
@@ -617,9 +623,11 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				// Check for listener beans and register them.
 				registerListeners();
 
+				// jb: non-lazy singleton bean의 실제 생성/의존성 주입/초기화/AOP 프록시 적용 시작.
 				// Instantiate all remaining (non-lazy-init) singletons.
 				finishBeanFactoryInitialization(beanFactory);
 
+				// jb: ContextRefreshedEvent 발행까지 끝나면 refresh 완료.
 				// Last step: publish corresponding event.
 				finishRefresh();
 			}
@@ -789,7 +797,8 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	/**
 	 * Instantiate and invoke all registered BeanFactoryPostProcessor beans,
 	 * respecting explicit order if given.
-	 * <p>Must be called before singleton instantiation.
+	 *
+	 * <p>Must be called before singleton instantiation. -> Bean들이 실제로 생성되기 전에 반드시 실행필요.
 	 */
 	protected void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
 		PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(beanFactory, getBeanFactoryPostProcessors());
@@ -990,6 +999,14 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		// Allow for caching all bean definition metadata, not expecting further changes.
 		beanFactory.freezeConfiguration();
 
+		// jb: D. 싱글톤 생성 시작
+		// jb: DefaultListableBeanFactory.preInstantiateSingletons()
+		// -> getBean()
+		// -> createBean()
+		// -> doCreateBean()
+		// -> populateBean()
+		// -> initializeBean()
+		// 순서로 내려가며 singleton을 완성한다.
 		// Instantiate all remaining (non-lazy-init) singletons.
 		beanFactory.preInstantiateSingletons();
 	}
@@ -1012,6 +1029,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		// Propagate refresh to lifecycle processor first.
 		getLifecycleProcessor().onRefresh();
 
+		// jb: 여기까지 오면 singleton 생성/초기화가 끝났고 ContextRefreshedEvent가 발행된다.
 		// Publish the final event.
 		publishEvent(new ContextRefreshedEvent(this));
 	}
@@ -1170,6 +1188,7 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	}
 
 	/**
+	 * jb: J-2 소멸 콜백 등록 / 종료
 	 * Actually performs context closing: publishes a ContextClosedEvent and
 	 * destroys the singletons in the bean factory of this application context.
 	 * <p>Called by both {@code close()} and a JVM shutdown hook, if any.
@@ -1203,6 +1222,8 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 				}
 			}
 
+			// jb: 스프링 종료 시점. destroyBeans() -> beanFactory.destroySingletons()
+			// -> DisposableBeanAdapter.destroy() 순서로 소멸 콜백이 실행된다.
 			// Destroy all cached singletons in the context's BeanFactory.
 			destroyBeans();
 

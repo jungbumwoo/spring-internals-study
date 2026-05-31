@@ -187,6 +187,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	/** Map from dependency type to corresponding autowired value. */
 	private final Map<Class<?>, Object> resolvableDependencies = new ConcurrentHashMap<>(16);
 
+	// jb: beanDefinition 저장
 	/** Map of bean definition objects, keyed by bean name. */
 	private final Map<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>(256);
 
@@ -202,6 +203,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	/** Map of singleton-only bean names, keyed by dependency type. */
 	private final Map<Class<?>, String[]> singletonBeanNamesByType = new ConcurrentHashMap<>(64);
 
+	// jb: bean 등록 순 저장. 종료도 여기 순서를 타는건가?
 	/** List of bean definition names, in registration order. */
 	private volatile List<String> beanDefinitionNames = new ArrayList<>(256);
 
@@ -1098,11 +1100,14 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		this.mainThreadPrefix = getThreadNamePrefix();
 	}
 
+	// jb: D. 싱톤 생성 시작
 	@Override
 	public void preInstantiateSingletons() throws BeansException {
 		if (logger.isTraceEnabled()) {
 			logger.trace("Pre-instantiating singletons in " + this);
 		}
+		// jb: refresh() 막바지에 호출되는 singleton eager creation 진입점.
+		// 여기서 등록된 non-lazy singleton BeanDefinition들을 순회하며 getBean(beanName)을 호출한다.
 
 		// Iterate over a copy to allow for init methods which in turn register new bean definitions.
 		// While this may not be part of the regular factory bootstrap, it does otherwise work fine.
@@ -1208,6 +1213,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 	}
 
 	private void instantiateSingleton(String beanName) {
+		// jb: 실사용 시점의 getBean()과 동일한 진입점을 재사용한다.
+		// 즉 "컨테이너가 미리 생성"하든 "사용자가 나중에 조회"하든 실제 생성 경로는 AbstractBeanFactory.doGetBean()으로 같다.
 		if (isFactoryBean(beanName)) {
 			Object bean = getBean(FACTORY_BEAN_PREFIX + beanName);
 			if (bean instanceof SmartFactoryBean<?> smartFactoryBean && smartFactoryBean.isEagerInit()) {
@@ -1239,12 +1246,15 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 	//---------------------------------------------------------------------
 	// Implementation of BeanDefinitionRegistry interface
+	//
+	// jb: BeanDefinition을 실제 Registry에 저장하는 코드
 	//---------------------------------------------------------------------
 
 	@Override
 	public void registerBeanDefinition(String beanName, BeanDefinition beanDefinition)
 			throws BeanDefinitionStoreException {
 
+		// BeanDefinition 검증
 		Assert.hasText(beanName, "Bean name must not be empty");
 		Assert.notNull(beanDefinition, "BeanDefinition must not be null");
 
@@ -1260,6 +1270,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 
 		BeanDefinition existingDefinition = this.beanDefinitionMap.get(beanName);
 		if (existingDefinition != null) {
+			// 의도 하지 않게 Override되어서 런타임에 문제 발생되는 경우는 없을까?
 			if (!isBeanDefinitionOverridable(beanName)) {
 				throw new BeanDefinitionOverrideException(beanName, beanDefinition, existingDefinition);
 			}
@@ -1269,6 +1280,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			this.beanDefinitionMap.put(beanName, beanDefinition);
 		}
 		else {
+			// alias 관련 validation.
 			if (isAlias(beanName)) {
 				String aliasedName = canonicalName(beanName);
 				if (!isBeanDefinitionOverridable(aliasedName)) {
@@ -1291,8 +1303,15 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 					removeAlias(beanName);
 				}
 			}
+
+			// 아직 Bean 생성이 시작되기 전이라면, BeanDefinition 등록 단계
 			if (hasBeanCreationStarted()) {
 				// Cannot modify startup-time collection elements anymore (for stable iteration)
+				/*
+				빈 생성이 이미 시작된 런타임 상태에 동적으로 빈이 추가될 경우, 다른 스레드가 beanDefinitionNames(ArrayList)를 순회하고 있을 수 있음.
+				이때 단순 추가를 하면 ConcurrentModificationException이 발생.
+				따라서 synchronized 블록으로 락(Lock)을 걸고, 새로운 ArrayList를 만들어 복사(Copy-on-Write 방식)한 뒤 레퍼런스를 교체하여 안정적인 순회를 보장.
+				* */
 				synchronized (this.beanDefinitionMap) {
 					this.beanDefinitionMap.put(beanName, beanDefinition);
 					List<String> updatedDefinitions = new ArrayList<>(this.beanDefinitionNames.size() + 1);
@@ -1302,6 +1321,8 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 					removeManualSingletonName(beanName);
 				}
 			}
+
+			// 아직 Bean 생성이 시작되지 않은 경우.
 			else {
 				// Still in startup registration phase
 				this.beanDefinitionMap.put(beanName, beanDefinition);
@@ -1311,6 +1332,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 			this.frozenBeanDefinitionNames = null;
 		}
 
+		// cache 초기화를 한다는데 이 부분은 아직 잘 모르겠음. 모종의 이유로 캐싱을 하는 거고, 변경이 발생하니 reset 해주는듯 함
 		if (existingDefinition != null || containsSingleton(beanName)) {
 			resetBeanDefinition(beanName);
 		}
@@ -1319,6 +1341,7 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 		}
 
 		// Cache a primary marker for the given bean.
+		// @Primary 사용 시
 		if (beanDefinition.isPrimary()) {
 			this.primaryBeanNamesWithType.put(beanName, Void.class);
 		}

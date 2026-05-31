@@ -222,6 +222,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	}
 
 	/**
+	 * jb: E. Bean 사용(getBean) -> 실제 생성
 	 * Return an instance, which may be shared or independent, of the specified bean.
 	 * @param name the name of the bean to retrieve
 	 * @param requiredType the required type of the bean to retrieve
@@ -236,10 +237,14 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	protected <T> T doGetBean(
 			String name, @Nullable Class<T> requiredType, @Nullable Object @Nullable [] args, boolean typeCheckOnly)
 			throws BeansException {
+		// jb: "Bean 사용" 단계의 대표 진입점.
+		// refresh() 중 preInstantiateSingletons()도 결국 여기로 들어오고,
+		// refresh 완료 후 applicationContext.getBean(...) 호출도 동일하게 여기로 들어온다.
 
 		String beanName = transformedBeanName(name);
 		Object beanInstance;
 
+		// jb: 이미 생성된 singleton이면 singleton cache에서 꺼내 바로 반환한다.
 		// Eagerly check singleton cache for manually registered singletons.
 		Object sharedInstance = getSingleton(beanName);
 		if (sharedInstance != null && args == null) {
@@ -326,6 +331,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 					}
 				}
 
+				// jb: cache miss이면 여기서 실제 생성 단계로 내려간다.
+				// singleton은 getSingleton(beanName, ObjectFactory) 안에서 createBean()을 호출한다.
 				// Create bean instance.
 				if (mbd.isSingleton()) {
 					sharedInstance = getSingleton(beanName, () -> {
@@ -1908,6 +1915,7 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	}
 
 	/**
+	 * jb: J-1: 소멸 콜백 등록 / 종료
 	 * Add the given bean to the list of disposable beans in this factory,
 	 * registering its DisposableBean interface and/or the given destroy method
 	 * to be called on factory shutdown (if applicable). Only applies to singletons.
@@ -1922,6 +1930,8 @@ public abstract class AbstractBeanFactory extends FactoryBeanRegistrySupport imp
 	protected void registerDisposableBeanIfNecessary(String beanName, Object bean, RootBeanDefinition mbd) {
 		if (!mbd.isPrototype() && requiresDestruction(bean, mbd)) {
 			if (mbd.isSingleton()) {
+				// jb: destroy 메서드, DisposableBean, DestructionAwareBeanPostProcessor 정보를
+				// DisposableBeanAdapter에 묶어 두었다가 context 종료 시점에 실행한다.
 				// Register a DisposableBean implementation that performs all destruction
 				// work for the given bean: DestructionAwareBeanPostProcessors,
 				// DisposableBean interface, custom destroy method.

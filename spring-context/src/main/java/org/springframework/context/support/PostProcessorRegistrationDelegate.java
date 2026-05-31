@@ -64,9 +64,12 @@ final class PostProcessorRegistrationDelegate {
 	private PostProcessorRegistrationDelegate() {
 	}
 
-
+	// jb: C-1. BeanFactoryPostProcessor 등록
 	public static void invokeBeanFactoryPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, List<BeanFactoryPostProcessor> beanFactoryPostProcessors) {
+		// jb: BeanDefinition은 registry에 올라가 있지만, 아직 대부분의 bean은 생성되지 않은 시점.
+		// 여기서 BeanFactoryPostProcessor가 BeanDefinition 메타데이터를 수정하고,
+		// BeanDefinitionRegistryPostProcessor는 새로운 BeanDefinition을 추가 등록할 수 있다.
 
 		// WARNING: Although it may appear that the body of this method can be easily
 		// refactored to avoid the use of multiple loops and multiple lists, the use
@@ -208,8 +211,11 @@ final class PostProcessorRegistrationDelegate {
 		beanFactory.clearMetadataCache();
 	}
 
+	// jb: C-2. BeanPostProcessor 등록
 	public static void registerBeanPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
+		// jb: 이후 생성되는 모든 bean이 이 BeanPostProcessor 체인을 통과한다.
+		// @Autowired 주입, @PostConstruct, AOP 프록시 wrapping 모두 이 단계에서 등록된 processor에 의해 수행된다.
 
 		// WARNING: Although it may appear that the body of this method can be easily
 		// refactored to avoid the use of multiple loops and multiple lists, the use
@@ -353,6 +359,13 @@ final class PostProcessorRegistrationDelegate {
 
 	/**
 	 * Invoke the given BeanFactoryPostProcessor beans.
+	 * jb: 각 후처리기의 실제 로직이 실행
+	 * ex) 각 후처리기의 실제 로직이 실행: 아래와 같은 코드:
+	 *
+	 * @Value("${db.url}")
+	 * private String dbUrl;
+	 *
+	 * placeholder를 실제 property 값으로 바꾸는 작업이 이 계열에서 일어남.
 	 */
 	private static void invokeBeanFactoryPostProcessors(
 			Collection<? extends BeanFactoryPostProcessor> postProcessors, ConfigurableListableBeanFactory beanFactory) {

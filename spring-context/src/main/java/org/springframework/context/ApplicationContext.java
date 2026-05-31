@@ -91,6 +91,27 @@ public interface ApplicationContext extends EnvironmentCapable, ListableBeanFact
 	@Nullable ApplicationContext getParent();
 
 	/**
+	 * *
+	 *  jb) start
+	 *  Spring 컨테이너 밖에서 생성된 객체에도 Spring의 의존성 주입, 초기화 콜백, BeanPostProcessor 일부 기능을 적용할 수 있게 해주는 BeanFactory를 꺼내는 메서드
+	 *
+	 *  OrderHandler handler = new OrderHandler();
+	 * 객체를 Spring이 만든 게 아니라 내가 직접 new로 만들었거나, 외부 프레임워크가 만든 경우 이 객체는 기본적으로 Spring Bean이 아니기 때문에
+	 *
+	 * @Autowired
+	 * private OrderService orderService;
+	 *
+	 * 같은 필드는 자동 주입되지 않음.
+	 * 일반적으로 쓸 일 없지만 아래와 같이 사용할 수 있게 해줌.
+	 *
+	 *  * OrderHandler handler = new OrderHandler();
+	 *  *
+	 *  * applicationContext
+	 *  *         .getAutowireCapableBeanFactory()
+	 *  *         .autowireBean(handler);
+	 *
+	 * jb) end
+	 *
 	 * Expose AutowireCapableBeanFactory functionality for this context.
 	 * <p>This is not typically used by application code, except for the purpose of
 	 * initializing bean instances that live outside the application context,

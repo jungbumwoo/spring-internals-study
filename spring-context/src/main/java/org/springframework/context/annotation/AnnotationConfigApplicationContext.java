@@ -81,6 +81,22 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	}
 
 	/**
+	 * jb: A. ApplicationContext 생성 (ABC ... 흐름 따라가기)
+	 *
+	 * scan -> registerBeanDefinition 이후 흐름은 요약하면
+	 *   refresh() -> invokeBeanFactoryPostProcessors() -> registerBeanPostProcessors() ->
+	 *   finishBeanFactoryInitialization() -> preInstantiateSingletons() -> doGetBean() -> createBean() -> doCreateBean()
+	 *   -> populateBean() -> initializeBean() -> postProcessAfterInitialization(AOP proxy) -> finishRefresh()
+	 *
+	 * ---
+	 * // ApplicationContext 생성
+	 * // -> BeanDefinition 로딩
+	 * // -> BeanFactory 준비
+	 * // -> BeanFactoryPostProcessor 실행
+	 * // -> BeanPostProcessor 등록
+	 * // -> singleton Bean 생성/초기화
+	 * // -> Context refresh 완료
+	 * ---
 	 * Create a new AnnotationConfigApplicationContext, deriving bean definitions
 	 * from the given component classes and automatically refreshing the context.
 	 * @param componentClasses one or more component classes &mdash; for example,
@@ -88,7 +104,9 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	 */
 	public AnnotationConfigApplicationContext(Class<?>... componentClasses) {
 		this();
+		// jb: ApplicationContext 생성 후 @Configuration/@Component class를 BeanDefinition으로 등록.
 		register(componentClasses);
+		// jb: 여기서부터 AbstractApplicationContext.refresh()가 전체 bean lifecycle bootstrap을 시작.
 		refresh();
 	}
 
@@ -100,7 +118,9 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	 */
 	public AnnotationConfigApplicationContext(String... basePackages) {
 		this();
+		// jb: classpath scanning으로 BeanDefinition을 등록.
 		scan(basePackages);
+		// jb: scan 결과는 "설계도(BeanDefinition)"만 준비된 상태이고, 실제 singleton 생성은 refresh()에서 진행.
 		refresh();
 	}
 

@@ -486,8 +486,11 @@ public class AutowiredAnnotationBeanPostProcessor implements SmartInstantiationA
 		}
 	}
 
+	// jb: F-2 의존성 주입
 	@Override
 	public PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName) {
+		// jb: @Autowired / @Value field, method injection이 실제로 수행되는 지점.
+		// 이 메서드는 AbstractAutowireCapableBeanFactory.populateBean() 안에서 호출된다.
 		InjectionMetadata metadata = findAutowiringMetadata(beanName, bean.getClass(), pvs);
 		try {
 			metadata.inject(bean, beanName, pvs);

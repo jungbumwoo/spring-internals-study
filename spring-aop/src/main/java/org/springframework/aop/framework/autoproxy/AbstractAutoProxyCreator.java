@@ -277,6 +277,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 	}
 
 	/**
+	 * jb: H-1 AOP 프록시 적용
 	 * Create a proxy with the configured interceptors if the bean is
 	 * identified as one to proxy by the subclass.
 	 * @see #getAdvicesAndAdvisorsForBean
@@ -286,6 +287,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 		if (bean != null) {
 			Object cacheKey = getCacheKey(bean.getClass(), beanName);
 			if (this.earlyBeanReferences.remove(cacheKey) != bean) {
+				// jb: 초기화가 끝난 최종 bean을 대상으로 proxy 적용 여부를 판단하는 대표 지점.
 				return wrapIfNecessary(bean, beanName, cacheKey);
 			}
 		}
@@ -312,6 +314,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 	}
 
 	/**
+	 * jb: H-2 AOP 프록시 적용
 	 * Wrap the given bean if necessary, i.e. if it is eligible for being proxied.
 	 * @param bean the raw bean instance
 	 * @param beanName the name of the bean
@@ -330,6 +333,8 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 			return bean;
 		}
 
+		// jb: advisor/advice가 매칭되면 여기서 target bean 대신 proxy를 반환한다.
+		// 이후 BeanFactory/ApplicationContext가 보관하고 사용자에게 돌려주는 객체는 proxy가 된다.
 		// Create proxy if we have advice.
 		Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
 		if (specificInterceptors != DO_NOT_PROXY) {

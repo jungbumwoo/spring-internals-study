@@ -198,6 +198,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	}
 
 	/**
+	 * jb: I-1 순환 참조용 early reference
 	 * Return the (raw) singleton object registered under the given name.
 	 * <p>Checks already instantiated singletons and also allows for an early
 	 * reference to a currently created singleton (resolving a circular reference).
@@ -206,6 +207,9 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 * @return the registered singleton object, or {@code null} if none found
 	 */
 	protected @Nullable Object getSingleton(String beanName, boolean allowEarlyReference) {
+		// jb: singletonObjects      -> 완전히 초기화된 singleton
+		// jb: earlySingletonObjects -> 순환 참조 해결용 조기 노출 객체
+		// jb: singletonFactories    -> 필요 시 early reference를 만들어내는 factory
 		// Quick check for existing instance without full singleton lock.
 		Object singletonObject = this.singletonObjects.get(beanName);
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
@@ -690,10 +694,12 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 		}
 	}
 
+	// jb: J-3 소멸 콜백 등록 / 종료
 	public void destroySingletons() {
 		if (logger.isTraceEnabled()) {
 			logger.trace("Destroying singletons in " + this);
 		}
+		// jb: context 종료 시 등록된 disposable bean들을 역순으로 파괴한다.
 		this.singletonsCurrentlyInDestruction = true;
 
 		String[] disposableBeanNames;
@@ -774,6 +780,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 * @param bean the bean instance to destroy
 	 */
 	protected void destroyBean(String beanName, @Nullable DisposableBean bean) {
+		// jb: dependent bean을 먼저 파괴한 뒤 현재 bean의 destroy callback을 호출한다.
 		// Trigger destruction of dependent beans first...
 		Set<String> dependentBeanNames;
 		synchronized (this.dependentBeanMap) {

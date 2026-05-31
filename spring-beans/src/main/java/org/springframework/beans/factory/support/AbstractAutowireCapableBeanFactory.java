@@ -509,7 +509,10 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 		}
 
+		// jb: E-2: Bean 사용(getBean) -> 실제 생성
 		try {
+			// jb: InstantiationAwareBeanPostProcessor가 "실제 target 대신 proxy를 바로 반환"할 수 있는 첫 번째 지점.
+			// AOP의 일부 shortcut proxy 생성이 이 before-instantiation 단계에서 일어날 수 있다.
 			// Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.
 			Object bean = resolveBeforeInstantiation(beanName, mbdToUse);
 			if (bean != null) {
@@ -540,6 +543,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	}
 
 	/**
+	 * jb: E-3: Bean 사용(getBean) -> 실제 생성
 	 * Actually create the specified bean. Pre-creation processing has already happened
 	 * at this point, for example, checking {@code postProcessBeforeInstantiation} callbacks.
 	 * <p>Differentiates between default bean instantiation, use of a
@@ -555,6 +559,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	 */
 	protected Object doCreateBean(String beanName, RootBeanDefinition mbd, @Nullable Object @Nullable [] args)
 			throws BeanCreationException {
+
+		// jb: bean lifecycle의 핵심 본체.
+		// 인스턴스 생성 -> merged definition 후처리 -> 순환참조용 early exposure -> 의존성 주입 -> 초기화 -> 소멸 콜백 등록
 
 		// Instantiate the bean.
 		BeanWrapper instanceWrapper = null;
@@ -596,6 +603,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
 		}
 
+		// jb: populateBean()에서 의존성 주입, initializeBean()에서 초기화 콜백과
+		// BeanPostProcessor after-init(AOP proxy wrapping 포함)을 수행한다.
 		// Initialize the bean instance.
 		Object exposedObject = bean;
 		try {
@@ -958,6 +967,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	}
 
 	/**
+	 * jb: I-2 순환 참조용 early reference
 	 * Obtain a reference for early access to the specified bean,
 	 * typically for the purpose of resolving a circular reference.
 	 * @param beanName the name of the bean (for error handling purposes)
@@ -968,6 +978,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	protected Object getEarlyBeanReference(String beanName, RootBeanDefinition mbd, Object bean) {
 		Object exposedObject = bean;
 		if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+			// jb: 순환 참조 상황에서 raw bean 대신 early proxy를 노출할 수 있는 지점.
 			for (SmartInstantiationAwareBeanPostProcessor bp : getBeanPostProcessorCache().smartInstantiationAware) {
 				exposedObject = bp.getEarlyBeanReference(exposedObject, beanName);
 			}
@@ -1412,6 +1423,8 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 		}
 
+		// jb: postProcessAfterInstantiation / postProcessProperties 단계에서
+		// AutowiredAnnotationBeanPostProcessor가 field/method injection을 수행한다.
 		// Give any InstantiationAwareBeanPostProcessors the opportunity to modify the
 		// state of the bean before properties are set. This can be used, for example,
 		// to support styles of field injection.
@@ -1779,6 +1792,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 
 	/**
+	 * jb: G 초기화 콜백
 	 * Initialize the given bean instance, applying factory callbacks
 	 * as well as init methods and bean post processors.
 	 * <p>Called from {@link #createBean} for traditionally defined beans,
@@ -1802,14 +1816,17 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			return bean;
 		}
 
+		// jb: BeanNameAware / BeanFactoryAware 같은 Aware callback
 		invokeAwareMethods(beanName, bean);
 
 		Object wrappedBean = bean;
 		if (mbd == null || !mbd.isSynthetic()) {
+			// jb: @PostConstruct 등을 처리하는 BeanPostProcessor들이 여기서 before-init 체인을 탄다.
 			wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
 		}
 
 		try {
+			// jb: InitializingBean.afterPropertiesSet() 및 custom init-method 호출
 			invokeInitMethods(beanName, wrappedBean, mbd);
 		}
 		catch (Throwable ex) {
@@ -1817,6 +1834,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 					(mbd != null ? mbd.getResourceDescription() : null), beanName, ex.getMessage(), ex);
 		}
 		if (mbd == null || !mbd.isSynthetic()) {
+			// jb: AOP auto proxy creator가 보통 여기서 최종 bean을 proxy로 감싼다.
 			wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
 		}
 
@@ -1865,6 +1883,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		}
 
 		if (mbd != null && bean.getClass() != NullBean.class) {
+			// jb: @Bean(initMethod="...") 또는 XML init-method 같은 사용자 정의 초기화 콜백
 			String[] initMethodNames = mbd.getInitMethodNames();
 			if (initMethodNames != null) {
 				for (String initMethodName : initMethodNames) {
