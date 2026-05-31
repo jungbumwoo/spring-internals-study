@@ -112,12 +112,17 @@ final class PostProcessorRegistrationDelegate {
 					beanFactory.getBeanNamesForType(BeanDefinitionRegistryPostProcessor.class, true, false);
 			for (String ppName : postProcessorNames) {
 				if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
+					// jb: ConfigurationClassPostProcessor 2-1. 2-*: refresh() 중 PostProcessorRegistrationDelegate가 processor를 찾아 실행하는 단계
+					// ConfigurationClassPostProcessor는 PriorityOrdered이므로 보통 이 구간에서 찾아진다.
+					// 아직 일반 bean 생성 전이지만, processor bean 자체는 getBean()으로 먼저 만들어 실행한다.
 					currentRegistryProcessors.add(beanFactory.getBean(ppName, BeanDefinitionRegistryPostProcessor.class));
 					processedBeans.add(ppName);
 				}
 			}
 			sortPostProcessors(currentRegistryProcessors, beanFactory);
 			registryProcessors.addAll(currentRegistryProcessors);
+			// jb: ConfigurationClassPostProcessor 2-2. 여기서 ConfigurationClassPostProcessor.postProcessBeanDefinitionRegistry()
+			// -> processConfigBeanDefinitions()가 호출되어 @Configuration/@Bean/@Import/@ComponentScan을 해석한다.
 			invokeBeanDefinitionRegistryPostProcessors(currentRegistryProcessors, registry, beanFactory.getApplicationStartup());
 			currentRegistryProcessors.clear();
 
@@ -153,6 +158,10 @@ final class PostProcessorRegistrationDelegate {
 			}
 
 			// Now, invoke the postProcessBeanFactory callback of all processors handled so far.
+			// jb: ConfigurationClassPostProcessor 4-1. 같은 ConfigurationClassPostProcessor의 두 번째 콜백.
+			// 4-*: postProcessBeanFactory()에서 CGLIB enhancement와 ImportAware 후처리를 등록하는 단계
+			// postProcessBeanFactory()에서 full @Configuration class를 CGLIB subclass로 교체하고,
+			// ImportAware 처리를 위한 BeanPostProcessor를 추가한다.
 			invokeBeanFactoryPostProcessors(registryProcessors, beanFactory);
 			invokeBeanFactoryPostProcessors(regularPostProcessors, beanFactory);
 		}

@@ -256,6 +256,9 @@ public class ClassPathBeanDefinitionScanner extends ClassPathScanningCandidateCo
 
 		// Register annotation config processors, if necessary.
 		if (this.includeAnnotationConfig) {
+			// jb: ConfigurationClassPostProcessor 1-1b. component scan으로 찾아낸 BeanDefinition만 등록하는 것으로 끝나지 않고,
+			// @Configuration/@Bean/@Import/@Autowired 등을 해석할 내부 processor들도 함께 등록한다.
+			// ConfigurationClassPostProcessor는 이 경로로 등록된 뒤 refresh() 중 실행된다.
 			AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
 		}
 

@@ -76,6 +76,7 @@ public abstract class ConfigurationClassUtils {
 
 	private static final Log logger = LogFactory.getLog(ConfigurationClassUtils.class);
 
+	// jb: ConfigurationClassPostProcessor 3-2a. 이거로 설정 관련 class인지 체크하네.
 	private static final Set<String> candidateIndicators = Set.of(
 			Component.class.getName(),
 			ComponentScan.class.getName(),

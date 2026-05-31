@@ -156,6 +156,10 @@ public abstract class AnnotationConfigUtils {
 		Set<BeanDefinitionHolder> beanDefs = CollectionUtils.newLinkedHashSet(6);
 
 		if (!registry.containsBeanDefinition(CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME)) {
+			// jb: ConfigurationClassPostProcessor 1-2. ConfigurationClassPostProcessor 자체도 BeanDefinition으로 등록된다.
+			// AnnotationConfigApplicationContext/ComponentScan 사용 시 여기서 자동 등록되고,
+			// refresh() 중 invokeBeanFactoryPostProcessors() 단계에서 실제 인스턴스화되어 실행된다.
+			// 이 processor가 @Configuration, @ComponentScan, @Import, @Bean 메서드를 읽어 추가 BeanDefinition을 registry에 밀어 넣음.
 			RootBeanDefinition def = new RootBeanDefinition(ConfigurationClassPostProcessor.class);
 			def.setSource(source);
 			beanDefs.add(registerPostProcessor(registry, def, CONFIGURATION_ANNOTATION_PROCESSOR_BEAN_NAME));

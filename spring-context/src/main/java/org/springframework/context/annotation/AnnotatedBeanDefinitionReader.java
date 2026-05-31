@@ -87,6 +87,9 @@ public class AnnotatedBeanDefinitionReader {
 		Assert.notNull(environment, "Environment must not be null");
 		this.registry = registry;
 		this.conditionEvaluator = new ConditionEvaluator(registry, environment, null);
+		// jb: ConfigurationClassPostProcessor 1-1a. 1-*: processor가 BeanDefinition으로 등록되는 단계
+		// @Configuration class를 직접 register(...)로 넘기는 방식에서도
+		// ConfigurationClassPostProcessor가 동작할 수 있도록 기본 annotation processor들을 먼저 등록한다.
 		AnnotationConfigUtils.registerAnnotationConfigProcessors(this.registry);
 	}
 

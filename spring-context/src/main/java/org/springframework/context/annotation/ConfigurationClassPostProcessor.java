@@ -134,6 +134,90 @@ import org.springframework.util.StringUtils;
  * {@link BeanFactoryPostProcessor} used for bootstrapping processing of
  * {@link Configuration @Configuration} classes.
  *
+ * jb)
+ * 이 클래스는 사용자가 직접 호출하는 코드가 아니라, AnnotationConfigUtils가 내부
+ * BeanDefinition으로 등록해 두면 refresh() 중 PostProcessorRegistrationDelegate가 찾아 실행한다.
+ *
+ * 큰 흐름:
+ * 1. postProcessBeanDefinitionRegistry()
+ *    - 아직 일반 bean 인스턴스가 생성되기 전이다.
+ *    - registry에 올라온 @Configuration 후보들을 파싱한다.
+ *    - @ComponentScan, @Import, @ImportResource, @Bean 메서드를 해석해 추가 BeanDefinition을 등록한다.
+ * 2. postProcessBeanFactory()
+ *    - full @Configuration class를 CGLIB enhanced class로 바꾼다.
+ *    - 같은 @Configuration 안의 @Bean 메서드 호출이 singleton bean 조회로 연결되도록 보장한다.
+ *
+ * ---
+ * CGLIB로 변경한다는게 무슨 소리인가?
+ *
+ * 핵심은 @Configuration 클래스 자체를 그대로 쓰지 않고, 그 하위 클래스를 만들어서 @Bean 메서드를 override한다는 점
+ *   예를 들어 이런 코드가 있다고 하면:
+ *
+ *   @Configuration
+ *   class AppConfig {
+ *
+ *         @Bean
+ *         MemberRepository memberRepository() {
+ *                 return new MemberRepository();
+ *         }
+ *
+ *         @Bean
+ *         MemberService memberService() {
+ *                 return new MemberService(memberRepository());
+ *         }
+ *   }
+ *
+ *   자바 코드만 보면 memberService() 안에서 memberRepository()를 직접 호출하므로 매번 new MemberRepository()가 실행될 것처럼 보임
+ *   하지만 Spring은 full @Configuration 클래스에 대해 대략 아래와 같은 형태의 CGLIB subclass를 만듬.
+ *   factory에서 가져오도록 바꿈.
+ *
+ *   class AppConfig$$SpringCGLIB extends AppConfig {
+ *
+ *         private BeanFactory beanFactory;
+ *
+ *         @Override
+ *         MemberRepository memberRepository() {
+ *                 return beanFactory.getBean("memberRepository", MemberRepository.class);
+ *         }
+ *
+ *         @Override
+ *         MemberService memberService() {
+ *                 return beanFactory.getBean("memberService", MemberService.class);
+ *         }
+ *   }
+ *
+ *   그래서 실제 런타임의 AppConfig bean은 원본 AppConfig가 아니라 AppConfig$$SpringCGLIB 같은 enhanced subclass 라는 것.
+ *   이 상태에서 memberService() 안의 memberRepository() 호출은 원본 메서드 직접 호출이 아니라, override된 메서드가 BeanFactory.getBean("memberRepository")로 되돌려 보내기 때문에
+ *   singleton cache에 있는 같은 객체가 반환.
+ *
+ *   실제 코드상 핵심은 spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassEnhancer.java:342의 BeanMethodInterceptor
+ *
+ *   이 interceptor는 @Bean 메서드 호출을 가로챈 뒤 두 경우를 구분
+ *
+ *   1. Spring 컨테이너가 해당 bean을 처음 만들기 위해 @Bean 메서드를 호출한 경우
+ *
+ *      이때는 실제 객체를 만들어야 하므로 원본 메서드를 호출합니다.
+ *
+ *      return cglibMethodProxy.invokeSuper(enhancedConfigInstance, beanMethodArgs);
+ *
+ *   2. 사용자 코드 또는 다른 @Bean 메서드에서 @Bean 메서드를 호출한 경우
+ *
+ *      이때는 새로 만들면 안 되므로 BeanFactory에서 가져옵니다.
+ *
+ *      return resolveBeanReference(beanMethod, beanMethodArgs, beanFactory, beanName);
+ *
+ *      그리고 내부적으로는 결국 beanFactory.getBean(beanName) 을 호출.
+ *
+ *   즉, CGLIB enhanced subclass로 교체한다는 말은 단순히 클래스를 바꾸는 게 아니라, @Bean 메서드 호출을 Spring이 가로챌 수 있는 구조로 바꾼다는 뜻.
+ *
+ *   참고로 이 동작은 기본 @Configuration(proxyBeanMethods = true)일 때 적용. 만약 아래처럼 설정하면
+ *
+ *   @Configuration(proxyBeanMethods = false)
+ *   class AppConfig {
+ *   }
+ *
+ *   CGLIB으로 @Bean 메서드 호출을 가로채지 않음. 그래서 이렇게 설정되었을 때는 @Bean 메서드끼리 직접 호출하는 inter-bean reference를 피해야 함.
+ * ---
  * <p>Registered by default when using {@code <context:annotation-config/>} or
  * {@code <context:component-scan/>}. Otherwise, may be declared manually as
  * with any other {@link BeanFactoryPostProcessor}.
@@ -307,6 +391,10 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		}
 		this.registriesPostProcessed.add(registryId);
 
+		// jb: ConfigurationClassPostProcessor 3-1. ConfigurationClassPostProcessor의 1차 역할.
+		// 3-*: postProcessBeanDefinitionRegistry() 안에서 configuration class를 파싱하고 BeanDefinition을 추가 등록하는 단계
+		// registry에 이미 등록된 후보 BeanDefinition을 훑어서 @Configuration 계열 메타데이터를 읽고,
+		// @Bean 메서드나 @Import 등으로부터 파생되는 BeanDefinition을 추가 등록한다.
 		processConfigBeanDefinitions(registry);
 	}
 
@@ -328,7 +416,11 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 			processConfigBeanDefinitions((BeanDefinitionRegistry) beanFactory);
 		}
 
+		// jb: ConfigurationClassPostProcessor 4-2. ConfigurationClassPostProcessor의 2차 역할.
+		// @Bean 메서드가 서로를 직접 호출해도 매번 새 객체를 만들지 않고 BeanFactory를 통해 singleton을 재사용하도록
+		// full @Configuration class를 CGLIB enhanced subclass로 교체한다.
 		enhanceConfigurationClasses(beanFactory);
+		// jb: ConfigurationClassPostProcessor 4-3. @Import를 통해 들어온 ImportAware bean에 import metadata를 주입하기 위한 후처리기를 추가한다.
 		beanFactory.addBeanPostProcessor(new ImportAwareBeanPostProcessor(beanFactory));
 	}
 
@@ -392,6 +484,9 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 				}
 			}
 			else if (ConfigurationClassUtils.checkConfigurationClassCandidate(beanDef, this.metadataReaderFactory)) {
+				// jb: ConfigurationClassPostProcessor 3-2. @Configuration뿐 아니라 @Component, @ComponentScan, @Import, @ImportResource,
+				// @Bean 메서드를 가진 class도 configuration class 후보가 될 수 있다.
+				// 후보로 표시해 두고 아래 parser가 실제 annotation metadata를 읽는다.
 				configCandidates.add(new BeanDefinitionHolder(beanDef, beanName));
 			}
 		}
@@ -443,6 +538,9 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 		Set<ConfigurationClass> alreadyParsed = CollectionUtils.newHashSet(configCandidates.size());
 		do {
 			StartupStep processConfig = this.applicationStartup.start("spring.context.config-classes.parse");
+			// jb: ConfigurationClassPostProcessor 3-3. @Configuration class의 annotation metadata를 파싱한다.
+			// 여기서 @ComponentScan을 만나면 scanner가 동작하고, @Import를 만나면 import 후보가 추가되며,
+			// @Bean 메서드는 ConfigurationClass 모델 안에 기록된다.
 			parser.parse(candidates);
 			parser.validate();
 
@@ -455,6 +553,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 						registry, this.sourceExtractor, this.resourceLoader, this.environment,
 						this.importBeanNameGenerator, parser.getImportRegistry());
 			}
+			// jb: ConfigurationClassPostProcessor 3-4. parser가 만든 ConfigurationClass 모델을 실제 BeanDefinition으로 변환한다.
+			// 대표적으로 @Bean 메서드 하나마다 factory-method 기반 BeanDefinition이 등록된다.
 			this.reader.loadBeanDefinitions(configClasses);
 			for (ConfigurationClass configClass : configClasses) {
 				this.beanRegistrars.addAll(configClass.getBeanRegistrars());
@@ -475,6 +575,8 @@ public class ConfigurationClassPostProcessor implements BeanDefinitionRegistryPo
 						BeanDefinition bd = registry.getBeanDefinition(candidateName);
 						if (ConfigurationClassUtils.checkConfigurationClassCandidate(bd, this.metadataReaderFactory) &&
 								!alreadyParsedClasses.contains(bd.getBeanClassName())) {
+							// jb: ConfigurationClassPostProcessor 3-5. 방금 @Import/@ComponentScan 처리로 새로 등록된 BeanDefinition이
+							// 또 다른 @Configuration 후보일 수 있으므로 반복해서 파싱한다.
 							candidates.add(new BeanDefinitionHolder(bd, candidateName));
 						}
 					}
