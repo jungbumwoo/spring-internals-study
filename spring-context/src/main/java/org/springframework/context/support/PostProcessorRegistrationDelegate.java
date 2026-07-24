@@ -220,7 +220,7 @@ final class PostProcessorRegistrationDelegate {
 		beanFactory.clearMetadataCache();
 	}
 
-	// jb: C-2. BeanPostProcessor 등록
+	// jb: C-2. BeanPostProcessor 등록 20260531 - 여기까지 봄. jb: D. 로 어떻게 이어지는지 찾고 거기부터 보면 될듯함.
 	public static void registerBeanPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
 		// jb: 이후 생성되는 모든 bean이 이 BeanPostProcessor 체인을 통과한다.
@@ -255,6 +255,29 @@ final class PostProcessorRegistrationDelegate {
 		List<String> orderedPostProcessorNames = new ArrayList<>();
 		List<String> nonOrderedPostProcessorNames = new ArrayList<>();
 		for (String ppName : postProcessorNames) {
+			/*
+			* PriorityOrdered로 등록되어 있는 BeanPostProcessor는 아래와 같은 것들이 있음.
+			*
+			* CommonAnnotationBeanPostProcessor
+			* AutowiredAnnotationBeanPostProcessor
+			*
+			* 1. PersistenceAnnotationBeanPostProcessor
+			* 	bean name: org.springframework.context.annotation.internalPersistenceAnnotationProcessor
+			* 	조건: JPA가 classpath에 있을 때만 등록
+			* 	order: Ordered.LOWEST_PRECEDENCE - 4
+			*
+			* 2. CommonAnnotationBeanPostProcessor
+			* 	bean name: org.springframework.context.annotation.internalCommonAnnotationProcessor
+			* 	조건: jakarta.annotation이 classpath에 있을 때만 등록
+			* order: Ordered.LOWEST_PRECEDENCE - 3
+			*
+			* 3. AutowiredAnnotationBeanPostProcessor
+			* 	bean name: org.springframework.context.annotation.internalAutowiredAnnotationProcessor
+			* 	조건: 기본 annotation config에서 등록
+			* 	order: Ordered.LOWEST_PRECEDENCE - 2
+			*
+			* 위와 같은 등록은 AnnotationConfigUtils.registerAnnotationConfigProcessors 에서 등록하고 있음.
+			* */
 			if (beanFactory.isTypeMatch(ppName, PriorityOrdered.class)) {
 				BeanPostProcessor pp = beanFactory.getBean(ppName, BeanPostProcessor.class);
 				priorityOrderedPostProcessors.add(pp);
