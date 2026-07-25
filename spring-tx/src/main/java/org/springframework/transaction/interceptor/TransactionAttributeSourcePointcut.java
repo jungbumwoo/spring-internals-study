@@ -52,6 +52,12 @@ final class TransactionAttributeSourcePointcut extends StaticMethodMatcherPointc
 
 	@Override
 	public boolean matches(Method method, Class<?> targetClass) {
+		/*
+		 * [@Transactional 프록시 흐름 4 - 적용 대상 선별]
+		 * TransactionAttribute가 존재한다는 것은 메서드 또는 fallback 대상 클래스에
+		 * @Transactional 메타데이터가 있다는 뜻이다. true이면 이 pointcut을 가진 Advisor,
+		 * 즉 TransactionInterceptor가 해당 메서드의 interceptor chain에 들어간다.
+		 */
 		return (this.transactionAttributeSource == null ||
 				this.transactionAttributeSource.hasTransactionAttribute(method, targetClass));
 	}

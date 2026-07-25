@@ -333,6 +333,12 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 	protected @Nullable Object invokeWithinTransaction(Method method, @Nullable Class<?> targetClass,
 			final InvocationCallback invocation) throws Throwable {
 
+		/*
+		 * [@Transactional 프록시 흐름 9 - 실제 wrapping 로직]
+		 * 호출된 인터페이스 Method와 실제 targetClass를 함께 사용해 가장 구체적인 메서드/클래스의
+		 * @Transactional을 TransactionAttribute로 조회한다. 그 속성의 qualifier 등을 기준으로
+		 * 이번 호출에 사용할 TransactionManager도 결정한다.
+		 */
 		// If the transaction attribute is null, the method is non-transactional.
 		TransactionAttributeSource tas = getTransactionAttributeSource();
 		final TransactionAttribute txAttr = (tas != null ? tas.getTransactionAttribute(method, targetClass) : null);
@@ -361,6 +367,17 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 		final String joinpointIdentification = methodIdentification(method, targetClass, txAttr);
 
 		if (txAttr == null || !(ptm instanceof CallbackPreferringPlatformTransactionManager cpptm)) {
+			/*
+			 * 일반 PlatformTransactionManager의 around 흐름:
+			 *
+			 * getTransaction(txAttr)
+			 *   -> 다음 interceptor/target 메서드
+			 *      -> 정상: commit
+			 *      -> 예외: rollbackOn(ex)이 true이면 rollback, 아니면 commit
+			 *
+			 * getTransaction()은 propagation에 따라 새 트랜잭션을 만들거나 기존 트랜잭션에
+			 * 참여한다. 따라서 여기서 항상 물리적으로 새 트랜잭션이 생기는 것은 아니다.
+			 */
 			// Standard transaction demarcation with getTransaction and commit/rollback calls.
 			TransactionInfo txInfo = createTransactionIfNecessary(ptm, txAttr, joinpointIdentification);
 
@@ -371,6 +388,11 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 				retVal = invocation.proceedWithInvocation();
 			}
 			catch (Throwable ex) {
+				/*
+				 * 기본 규칙은 RuntimeException/Error에 rollback, checked exception에는 commit이다.
+				 * @Transactional의 rollbackFor/noRollbackFor 또는 전역 기본 규칙이 있으면
+				 * TransactionAttribute.rollbackOn(ex)이 그 규칙을 반영한다.
+				 */
 				// target invocation exception
 				completeTransactionAfterThrowing(txInfo, invocation, ex);
 				throw ex;
@@ -405,6 +427,7 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 				}
 			}
 
+			// Future/Vavr 등 즉시 확인 가능한 실패까지 반영한 뒤 정상 반환 트랜잭션을 commit한다.
 			commitTransactionAfterReturning(txInfo);
 			return retVal;
 		}

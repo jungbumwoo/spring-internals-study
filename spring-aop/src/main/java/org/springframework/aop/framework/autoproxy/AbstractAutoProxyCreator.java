@@ -330,6 +330,16 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 			return bean;
 		}
 
+		/*
+		 * [@Transactional 프록시 흐름 5 - 원본 빈을 프록시로 교체]
+		 * AbstractAdvisorAutoProxyCreator 구현은 BeanFactory의 Advisor를 조회하고 pointcut이
+		 * 이 빈에 적용되는지 검사한다. 트랜잭션 Advisor가 발견되면 원본 bean을
+		 * SingletonTargetSource로 보관한 프록시를 만들어 BeanPostProcessor 결과로 반환한다.
+		 *
+		 * 이후 다른 빈이 주입받는 객체는 일반적으로 원본 bean이 아니라 이 proxy이다.
+		 * 인터페이스 기반이면 JDK 동적 프록시, proxyTargetClass=true 등이면 보통 CGLIB
+		 * 클래스 프록시가 선택되지만, 두 방식 모두 같은 advice chain을 실행한다.
+		 */
 		// Create proxy if we have advice.
 		Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
 		if (specificInterceptors != DO_NOT_PROXY) {

@@ -82,6 +82,16 @@ public abstract class AbstractTransactionManagementConfiguration implements Impo
 	@Bean
 	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 	public TransactionAttributeSource transactionAttributeSource() {
+		/*
+		 * [@Transactional 프록시 흐름 2 - 애노테이션을 메타데이터로 변환]
+		 * AnnotationTransactionAttributeSource는 메서드/클래스의 @Transactional을 찾아
+		 * propagation, isolation, timeout, readOnly, rollback 규칙 등이 담긴
+		 * TransactionAttribute로 변환하고 캐시한다.
+		 *
+		 * 같은 객체는 프록시 생성 시 "이 빈에 트랜잭션 메서드가 있는가?"를 판단하는 pointcut과,
+		 * 호출 시 "이번 메서드에 어떤 트랜잭션 규칙을 적용할 것인가?"를 판단하는 interceptor가
+		 * 함께 사용한다.
+		 */
 		// Accept protected @Transactional methods on CGLIB proxies, as of 6.0
 		AnnotationTransactionAttributeSource tas = new AnnotationTransactionAttributeSource(false);
 		// Apply default rollback rule, as of 6.2

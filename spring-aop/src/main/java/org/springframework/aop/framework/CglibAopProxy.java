@@ -689,6 +689,15 @@ class CglibAopProxy implements AopProxy, Serializable {
 
 		@Override
 		public @Nullable Object intercept(Object proxy, Method method, Object[] args, MethodProxy methodProxy) throws Throwable {
+			/*
+			 * [@Transactional 프록시 흐름 6b - CGLIB 프록시의 외부 호출 진입점]
+			 * CGLIB 방식은 서브클래스의 오버라이드 메서드가 여기로 위임한다는 점만 JDK
+			 * InvocationHandler와 다르다. 이후에는 동일하게 Advisor로부터 chain을 구해
+			 * TransactionInterceptor를 거쳐 대상 메서드를 호출한다.
+			 *
+			 * 대상 인스턴스 안의 this 호출은 이 외부 proxy 진입점을 통과하지 않으므로,
+			 * JDK 방식과 마찬가지로 self-invocation에는 트랜잭션 advice가 재적용되지 않는다.
+			 */
 			Object oldProxy = null;
 			boolean setProxyContext = false;
 			Object target = null;
@@ -715,6 +724,7 @@ class CglibAopProxy implements AopProxy, Serializable {
 					retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
 				}
 				else {
+					// @Transactional 메서드라면 chain에 TransactionInterceptor가 포함된다.
 					// We need to create a method invocation...
 					retVal = new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain).proceed();
 				}

@@ -164,6 +164,16 @@ final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializa
 	 */
 	@Override
 	public @Nullable Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+		/*
+		 * [@Transactional 프록시 흐름 6a - JDK 프록시의 외부 호출 진입점]
+		 * 클라이언트가 인터페이스 메서드를 호출하면 원본 객체로 바로 가지 않고 이
+		 * InvocationHandler로 들어온다. 이 진입점을 통과해야 아래 advice chain에
+		 * TransactionInterceptor가 포함될 수 있다.
+		 *
+		 * 반대로 대상 객체가 자기 메서드를 this.otherMethod()로 호출하면 proxy의 invoke()를
+		 * 거치지 않는다. 그래서 그 내부 호출에만 붙은 @Transactional은 PROXY 모드에서 새로
+		 * 적용되지 않는다(self-invocation 한계).
+		 */
 		Object oldProxy = null;
 		boolean setProxyContext = false;
 
@@ -215,6 +225,10 @@ final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializa
 				retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
 			}
 			else {
+				/*
+				 * 매칭된 Advisor의 advice들을 MethodInvocation으로 묶는다. @Transactional
+				 * 메서드라면 이 chain 안에 TransactionInterceptor가 들어 있다.
+				 */
 				// We need to create a method invocation...
 				MethodInvocation invocation =
 						new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain);

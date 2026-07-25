@@ -121,15 +121,26 @@ public class TransactionInterceptor extends TransactionAspectSupport
 
 	@Override
 	public @Nullable Object invoke(MethodInvocation invocation) throws Throwable {
+		/*
+		 * [@Transactional 프록시 흐름 8 - 트랜잭션 advice 진입]
+		 * 프록시의 interceptor chain이 이 메서드를 호출한다. invocation에는 현재 프록시 호출,
+		 * 실제 target, 호출할 Method, 그리고 남은 interceptor chain이 들어 있다.
+		 */
 		// Work out the target class: may be {@code null}.
 		// The TransactionAttributeSource should be passed the target class
 		// as well as the method, which may be from an interface.
 		Class<?> targetClass = (invocation.getThis() != null ? AopUtils.getTargetClass(invocation.getThis()) : null);
 
+		/*
+		 * 트랜잭션 공통 템플릿에 "다음 chain을 실행하는 콜백"을 넘긴다.
+		 * invokeWithinTransaction()은 이 콜백 바깥에서 begin/commit/rollback을 수행하므로
+		 * 대상 메서드는 트랜잭션 경계 안에서 실행된다.
+		 */
 		// Adapt to TransactionAspectSupport's invokeWithinTransaction...
 		return invokeWithinTransaction(invocation.getMethod(), targetClass, new InvocationCallback() {
 			@Override
 			public @Nullable Object proceedWithInvocation() throws Throwable {
+				// 다음 interceptor가 있으면 그것을, 없으면 최종 target 메서드를 호출한다.
 				return invocation.proceed();
 			}
 			@Override

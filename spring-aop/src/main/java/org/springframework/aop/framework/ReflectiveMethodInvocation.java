@@ -153,6 +153,18 @@ public class ReflectiveMethodInvocation implements ProxyMethodInvocation, Clonea
 
 	@Override
 	public @Nullable Object proceed() throws Throwable {
+		/*
+		 * [@Transactional 프록시 흐름 7 - around advice chain]
+		 * proceed()는 interceptor를 하나씩 실행한다. 각 interceptor는 자신이 할 일을 전후로
+		 * 다시 invocation.proceed()를 호출하므로 중첩된 around 구조가 된다.
+		 *
+		 * TransactionInterceptor.invoke()
+		 *   -> 트랜잭션 시작
+		 *   -> invocation.proceed()로 다음 interceptor 또는 실제 대상 메서드 실행
+		 *   -> 정상 반환이면 commit, 예외이면 rollback 규칙 적용
+		 *
+		 * 모든 interceptor를 소비한 뒤에만 아래 invokeJoinpoint()가 실제 target을 호출한다.
+		 */
 		// We start with an index of -1 and increment early.
 		if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
 			return invokeJoinpoint();

@@ -46,8 +46,15 @@ public class ProxyTransactionManagementConfiguration extends AbstractTransaction
 	public BeanFactoryTransactionAttributeSourceAdvisor transactionAdvisor(
 			TransactionAttributeSource transactionAttributeSource, TransactionInterceptor transactionInterceptor) {
 
+		/*
+		 * [@Transactional 프록시 흐름 3 - pointcut + advice]
+		 * Advisor는 "어디에 적용할지"를 정하는 pointcut과 "무엇을 실행할지"를 정하는 advice의
+		 * 묶음이다. 이 Advisor가 @Transactional 메서드를 가진 빈에 적용 가능하므로 자동 프록시
+		 * 생성기는 그 빈을 프록시로 감싼다.
+		 */
 		BeanFactoryTransactionAttributeSourceAdvisor advisor = new BeanFactoryTransactionAttributeSourceAdvisor();
 		advisor.setTransactionAttributeSource(transactionAttributeSource);
+		// 외부 호출이 매칭되면 advice인 TransactionInterceptor가 대상 메서드보다 먼저 실행된다.
 		advisor.setAdvice(transactionInterceptor);
 		if (this.enableTx != null) {
 			advisor.setOrder(this.enableTx.<Integer>getNumber("order"));
@@ -59,6 +66,7 @@ public class ProxyTransactionManagementConfiguration extends AbstractTransaction
 	@Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 	public TransactionInterceptor transactionInterceptor(TransactionAttributeSource transactionAttributeSource) {
 		TransactionInterceptor interceptor = new TransactionInterceptor();
+		// pointcut과 동일한 source를 사용하므로 프록시 생성 시점과 호출 시점의 판정이 일치한다.
 		interceptor.setTransactionAttributeSource(transactionAttributeSource);
 		if (this.txManager != null) {
 			interceptor.setTransactionManager(this.txManager);
