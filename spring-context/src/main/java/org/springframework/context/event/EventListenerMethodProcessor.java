@@ -55,6 +55,10 @@ import org.springframework.util.CollectionUtils;
  * Implements {@link BeanFactoryPostProcessor} (as of 5.1) primarily for early retrieval,
  * avoiding AOP checks for this processor bean and its {@link EventListenerFactory} delegates.
  *
+ * SmartInitializingSingleton으로 동작해 모든 싱글턴 빈 생성이 끝난 뒤 빈들을 스캔하고,
+ * @EventListener 메서드를 발견하면 ApplicationListenerMethodAdapter로 감싸서 ApplicationListener로 등록합니다.
+ * 이 어댑터가 SpEL condition 평가, 리플렉션 메서드 호출, 반환값 재발행(chaining) 등을 담당
+ *
  * @author Stephane Nicoll
  * @author Juergen Hoeller
  * @author Sebastien Deleuze

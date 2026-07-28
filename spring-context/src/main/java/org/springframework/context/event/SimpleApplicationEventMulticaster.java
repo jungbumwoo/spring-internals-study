@@ -135,6 +135,13 @@ public class SimpleApplicationEventMulticaster extends AbstractApplicationEventM
 
 	@Override
 	public void multicastEvent(ApplicationEvent event, @Nullable ResolvableType eventType) {
+		/*
+		* SimpleApplicationEventMulticaster.multicastEvent() 리스너 목록을 순회하며
+		* invokeListener() → listener.onApplicationEvent(event)를 호출합니다.
+		* TaskExecutor를 설정하지 않으면 호출 스레드에서 동기 실행됩니다.
+		* 즉 리스너가 예외를 던지면 그 예외가 publishEvent()를 호출한 코드까지 그대로 전파됩니다(ErrorHandler 미설정 시).
+		* -> 에러 전파 차원에서도 별도 executor를 쓰는게 좋을 수도 있고, 반대로 전파를 못받는 다는걸 유의해야할듯?
+		* */
 		ResolvableType type = (eventType != null ? eventType : ResolvableType.forInstance(event));
 		Executor executor = getTaskExecutor();
 		for (ApplicationListener<?> listener : getApplicationListeners(event, type)) {

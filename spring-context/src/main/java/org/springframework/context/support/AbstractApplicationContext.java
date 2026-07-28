@@ -410,6 +410,8 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 	 * instead for such scenarios.
 	 * @since 4.2
 	 * @see ApplicationEventMulticaster#multicastEvent(ApplicationEvent, ResolvableType)
+	 *
+	 * jb: 모든 이벤트 발행은 AbstractApplicationContext.publishEvent(Object, ResolvableType)로 수렴
 	 */
 	protected void publishEvent(Object event, @Nullable ResolvableType typeHint) {
 		Assert.notNull(event, "Event must not be null");
@@ -441,14 +443,18 @@ public abstract class AbstractApplicationContext extends DefaultResourceLoader
 		}
 
 		// Multicast right now if possible - or lazily once the multicaster is initialized
+		// 1. payload(POJO)라면 PayloadApplicationEvent로 감싼다
+		// 2. earlyApplicationEvents가 null이 아니면 (컨텍스트 refresh 완료 전) 큐에 쌓아둔다
 		if (this.earlyApplicationEvents != null) {
 			this.earlyApplicationEvents.add(applicationEvent);
 		}
+		// 3. multicaster가 준비됐으면 즉시 발행
 		else if (this.applicationEventMulticaster != null) {
 			this.applicationEventMulticaster.multicastEvent(applicationEvent, eventType);
 		}
 
 		// Publish event via parent context as well...
+		// 4. 부모 컨텍스트가 있으면 부모에도 전파
 		if (this.parent != null) {
 			if (this.parent instanceof AbstractApplicationContext abstractApplicationContext) {
 				abstractApplicationContext.publishEvent(event, typeHint);
