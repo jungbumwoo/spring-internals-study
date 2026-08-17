@@ -695,6 +695,11 @@ class CglibAopProxy implements AopProxy, Serializable {
 			 * InvocationHandler와 다르다. 이후에는 동일하게 Advisor로부터 chain을 구해
 			 * TransactionInterceptor를 거쳐 대상 메서드를 호출한다.
 			 *
+			 * Client
+    			→ TransactionalServiceProxy
+        			→ TransactionInterceptor
+            			→ Real TransactionalService
+			 *
 			 * 대상 인스턴스 안의 this 호출은 이 외부 proxy 진입점을 통과하지 않으므로,
 			 * JDK 방식과 마찬가지로 self-invocation에는 트랜잭션 advice가 재적용되지 않는다.
 			 */
@@ -711,6 +716,7 @@ class CglibAopProxy implements AopProxy, Serializable {
 				// Get as late as possible to minimize the time we "own" the target, in case it comes from a pool...
 				target = targetSource.getTarget();
 				Class<?> targetClass = (target != null ? target.getClass() : null);
+				// 프록시의 역할은 트랜잭션을 직접 시작하는 것이 아니라, 실제 객체 호출 앞에 interceptor chain을 끼워 넣는 것.
 				List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
 				Object retVal;
 				// Check whether we only have one InvokerInterceptor: that is,

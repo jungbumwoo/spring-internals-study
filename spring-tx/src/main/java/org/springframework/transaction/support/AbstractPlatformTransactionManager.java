@@ -372,6 +372,14 @@ public abstract class AbstractPlatformTransactionManager
 	@Override
 	public final TransactionStatus getTransaction(@Nullable TransactionDefinition definition)
 			throws TransactionException {
+		/*
+		 * [@Transactional 실행 흐름 11 - propagation 판단]
+		 * 이 클래스는 트랜잭션 종류(JDBC/JPA/JTA)에 공통인 상태 머신이다.
+		 * doGetTransaction()으로 현재 스레드에 이미 바인딩된 자원이 있는지 확인한 뒤,
+		 * REQUIRED면 기존 트랜잭션에 참여하거나 없을 때만 시작하고, REQUIRES_NEW면 기존
+		 * 자원을 suspend한 후 새 트랜잭션을 시작한다. 실제 자원별 작업은 doBegin(),
+		 * doCommit(), doRollback(), doCleanupAfterCompletion() 템플릿 메서드에 위임한다.
+		 */
 
 		// Use defaults if no transaction definition given.
 		TransactionDefinition def = (definition != null ? definition : TransactionDefinition.withDefaults());
@@ -529,6 +537,7 @@ public abstract class AbstractPlatformTransactionManager
 				definition, transaction, true, newSynchronization, nested, debugEnabled, suspendedResources);
 		this.transactionExecutionListeners.forEach(listener -> listener.beforeBegin(status));
 		try {
+			// JDBC 매니저라면 여기서 Connection 획득, autoCommit=false, ThreadLocal 바인딩이 수행된다.
 			doBegin(transaction, definition);
 		}
 		catch (RuntimeException | Error ex) {
@@ -574,6 +583,11 @@ public abstract class AbstractPlatformTransactionManager
 	 */
 	protected void prepareSynchronization(DefaultTransactionStatus status, TransactionDefinition definition) {
 		if (status.isNewSynchronization()) {
+			/*
+			 * Connection 외에도 트랜잭션 이름/readOnly/isolation/활성 여부와 completion callback
+			 * 목록을 현재 스레드에 노출한다. commit/rollback 완료 뒤 cleanupAfterCompletion()의
+			 * TransactionSynchronizationManager.clear()가 이 메타데이터를 제거한다.
+			 */
 			TransactionSynchronizationManager.setActualTransactionActive(status.hasTransaction());
 			TransactionSynchronizationManager.setCurrentTransactionIsolationLevel(
 					definition.getIsolationLevel() != TransactionDefinition.ISOLATION_DEFAULT ?

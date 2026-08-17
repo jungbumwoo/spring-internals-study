@@ -245,6 +245,16 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 
 	@Override
 	protected Object doGetTransaction() {
+		/*
+		 * [@Transactional 실행 흐름 12 - 현재 스레드의 JDBC 트랜잭션 조회]
+		 * 같은 DataSource를 key로 ThreadLocal Map을 조회한다. ConnectionHolder가 있고
+		 * transactionActive이면 isExistingTransaction()이 true가 되어 REQUIRED 같은 전파
+		 * 속성은 이 물리 트랜잭션에 참여한다.
+		 *
+		 * ThreadLocal<Map<Object, Object>>
+         *       │
+         *       └── DataSource → ConnectionHolder → JDBC Connection
+		 */
 		DataSourceTransactionObject txObject = new DataSourceTransactionObject();
 		txObject.setSavepointAllowed(isNestedTransactionAllowed());
 		ConnectionHolder conHolder =
@@ -261,6 +271,12 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 
 	@Override
 	protected void doBegin(Object transaction, TransactionDefinition definition) {
+		/*
+		 * [@Transactional 실행 흐름 13 - Connection 시작 및 스레드 바인딩]
+		 * 새 Connection이 필요하면 DataSource에서 획득하고 isolation/readOnly를 적용한 뒤
+		 * autoCommit을 false로 전환한다. 마지막 bindResource()가
+		 * DataSource -> ConnectionHolder를 현재 스레드에 연결하는 핵심 지점이다.
+		 */
 		DataSourceTransactionObject txObject = (DataSourceTransactionObject) transaction;
 		Connection con = null;
 
@@ -334,6 +350,7 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 
 	@Override
 	protected void doCommit(DefaultTransactionStatus status) {
+		// [@Transactional 실행 흐름 15a] 정상 반환 시 현재 TransactionObject의 Connection을 commit한다.
 		DataSourceTransactionObject txObject = (DataSourceTransactionObject) status.getTransaction();
 		Connection con = txObject.getConnectionHolder().getConnection();
 		if (status.isDebug()) {
@@ -349,6 +366,7 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 
 	@Override
 	protected void doRollback(DefaultTransactionStatus status) {
+		// [@Transactional 실행 흐름 15b] rollback 규칙에 맞는 예외이면 같은 Connection을 rollback한다.
 		DataSourceTransactionObject txObject = (DataSourceTransactionObject) status.getTransaction();
 		Connection con = txObject.getConnectionHolder().getConnection();
 		if (status.isDebug()) {
@@ -374,6 +392,13 @@ public class DataSourceTransactionManager extends AbstractPlatformTransactionMan
 
 	@Override
 	protected void doCleanupAfterCompletion(Object transaction) {
+		/*
+		 * [@Transactional 실행 흐름 16 - 정리]
+		 * 새로 바인딩한 ConnectionHolder를 현재 스레드에서 해제하고, autoCommit/isolation/
+		 * readOnly 상태를 원복한 다음 Connection을 DataSource(보통 connection pool)에 반환한다.
+		 * 이 정리가 있어 스레드 풀에서 같은 스레드를 다음 요청이 재사용해도 이전 트랜잭션의
+		 * Connection이 전달되지 않는다.
+		 */
 		DataSourceTransactionObject txObject = (DataSourceTransactionObject) transaction;
 
 		// Remove the connection holder from the thread, if exposed.

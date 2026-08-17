@@ -48,6 +48,11 @@ public class ProxyTransactionManagementConfiguration extends AbstractTransaction
 
 		/*
 		 * [@Transactional 프록시 흐름 3 - pointcut + advice]
+		 *
+		 *  Advisor
+		   	├─ Pointcut: 어디에 적용할 것인가?
+   			└─ Advice:   무엇을 실행할 것인가?
+   		 *
 		 * Advisor는 "어디에 적용할지"를 정하는 pointcut과 "무엇을 실행할지"를 정하는 advice의
 		 * 묶음이다. 이 Advisor가 @Transactional 메서드를 가진 빈에 적용 가능하므로 자동 프록시
 		 * 생성기는 그 빈을 프록시로 감싼다.

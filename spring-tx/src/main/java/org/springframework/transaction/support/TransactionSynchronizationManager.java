@@ -74,6 +74,18 @@ import org.springframework.util.Assert;
  */
 public abstract class TransactionSynchronizationManager {
 
+	/*
+	 * [@Transactional ThreadLocal 핵심 저장소]
+	 * 스레드마다 하나의 Map을 가지고, 일반적인 JDBC 트랜잭션에서는 다음 형태로 저장한다.
+	 *
+	 *   key   = DataSource (정확히는 unwrap된 resource factory)
+	 *   value = ConnectionHolder (내부에 실제 java.sql.Connection 보관)
+	 *
+	 * 따라서 "Connection 하나를 ThreadLocal에 직접 저장"하는 구조가 아니다. 한 스레드가
+	 * 여러 DataSource를 사용할 수 있도록 Map이며, 같은 DataSource를 사용하는 JDBC 작업은
+	 * 같은 ConnectionHolder를 조회한다. ThreadLocal은 스레드 풀의 스레드에 남을 수 있으므로
+	 * 트랜잭션 완료 시 unbindResource()/clear()로 반드시 제거한다.
+	 */
 	private static final ThreadLocal<Map<Object, Object>> resources =
 			new NamedThreadLocal<>("Transactional resources");
 
@@ -139,6 +151,7 @@ public abstract class TransactionSynchronizationManager {
 	 * Actually check the value of the resource that is bound for the given key.
 	 */
 	private static @Nullable Object doGetResource(Object actualKey) {
+		// 호출한 스레드의 Map만 보이므로 다른 요청 스레드의 ConnectionHolder와 섞이지 않는다.
 		Map<Object, Object> map = resources.get();
 		if (map == null) {
 			return null;
@@ -230,6 +243,7 @@ public abstract class TransactionSynchronizationManager {
 		// set ThreadLocal Map if none found
 		if (map == null) {
 			map = new HashMap<>();
+			// 최초 자원 바인딩 시에만 현재 스레드 전용 Map을 만든다.
 			resources.set(map);
 		}
 		Object oldValue = map.put(actualKey, value);
@@ -285,6 +299,7 @@ public abstract class TransactionSynchronizationManager {
 		Object value = map.remove(actualKey);
 		// Remove entire ThreadLocal if empty...
 		if (map.isEmpty()) {
+			// 값만 지우지 않고 ThreadLocal 자체를 제거해 pooled thread의 자원 누수를 막는다.
 			resources.remove();
 		}
 		// Transparently suppress a ResourceHolder that was marked as void...

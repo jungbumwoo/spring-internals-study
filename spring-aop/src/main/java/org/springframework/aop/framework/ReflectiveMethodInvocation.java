@@ -85,6 +85,8 @@ public class ReflectiveMethodInvocation implements ProxyMethodInvocation, Clonea
 	/**
 	 * Index from 0 of the current interceptor we're invoking.
 	 * -1 until we invoke: then the current interceptor.
+	 *
+	 * proceed()를 호출할 때마다 다음 interceptor로 이동
 	 */
 	private int currentInterceptorIndex = -1;
 

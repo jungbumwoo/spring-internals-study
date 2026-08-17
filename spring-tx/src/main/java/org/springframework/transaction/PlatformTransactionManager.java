@@ -36,6 +36,12 @@ import org.jspecify.annotations.Nullable;
  * in common single-resource scenarios, Spring's specific transaction managers
  * for example, JDBC, JPA, JMS are preferred choices.
  *
+ *   PlatformTransactionManager
+ *    ├─ DataSourceTransactionManager
+ *    ├─ JpaTransactionManager
+ *    ├─ JtaTransactionManager
+ *    └─ JdbcTransactionManage
+ *
  * @author Rod Johnson
  * @author Juergen Hoeller
  * @since 16.05.2003

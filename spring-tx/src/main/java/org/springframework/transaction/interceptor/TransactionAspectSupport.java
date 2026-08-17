@@ -120,6 +120,10 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 	 * and to support communication between different cooperating advices
 	 * (for example, before and after advice) if the aspect involves more than a
 	 * single method (as will be the case for around advice).
+	 * <p>주의: 이 ThreadLocal은 JDBC Connection을 저장하는 곳이 아니다.
+	 * 현재 AOP 호출의 TransactionStatus를 노출하고 중첩 호출 뒤 이전 상태를 복원하기 위한
+	 * 스택 역할을 한다. 실제 ConnectionHolder는 TransactionSynchronizationManager의
+	 * resources ThreadLocal Map에 DataSource를 key로 저장된다.
 	 */
 	private static final ThreadLocal<TransactionInfo> transactionInfoHolder =
 			new NamedThreadLocal<>("Current aspect-driven transaction");
@@ -648,6 +652,14 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 		TransactionStatus status = null;
 		if (txAttr != null) {
 			if (tm != null) {
+				/*
+				 * [@Transactional 실행 흐름 10 - 트랜잭션 매니저에 시작 요청]
+				 * @Transactional에서 읽은 propagation/isolation/readOnly/timeout 정보가
+				 * TransactionAttribute(txAttr)에 들어 있다. JDBC 환경의 tm이
+				 * DataSourceTransactionManager라면 이 호출은
+				 * AbstractPlatformTransactionManager.getTransaction()을 거쳐 JDBC Connection을
+				 * 준비하고 현재 스레드에 바인딩한다.
+				 */
 				status = tm.getTransaction(txAttr);
 			}
 			else {

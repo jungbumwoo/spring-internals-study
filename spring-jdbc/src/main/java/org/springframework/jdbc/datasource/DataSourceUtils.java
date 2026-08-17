@@ -103,6 +103,21 @@ public abstract class DataSourceUtils {
 	public static Connection doGetConnection(DataSource dataSource) throws SQLException {
 		Assert.notNull(dataSource, "No DataSource specified");
 
+		/*
+		 * [@Transactional 실행 흐름 14 - 애플리케이션 JDBC 코드가 같은 Connection 재사용]
+		 * JdbcTemplate 등이 DataSource.getConnection()을 직접 호출하지 않고 이 메서드를
+		 * 사용하는 이유다. DataSourceTransactionManager.doBegin()이 현재 스레드에 바인딩한
+		 * ConnectionHolder를 같은 DataSource key로 찾아 내부 Connection을 반환한다.
+		 *
+		 *  - ThreadLocal에 ConnectionHolder가 있는지 확인
+			- 있으면 기존 Connection 반환
+  			- 없으면 새로운 Connection 획득
+  			- synchronization 등록
+  			- 트랜잭션 종료 시 release 여부 판단
+		 *
+		 * 따라서 트랜잭션 내부에서 직접 JDBC를 사용할 때도 DataSourceUtils 또는
+		 * TransactionAwareDataSourceProxy를 거쳐야 이 스레드 바인딩에 참여할 수 있다.
+		 */
 		ConnectionHolder conHolder = (ConnectionHolder) TransactionSynchronizationManager.getResource(dataSource);
 		if (conHolder != null && (conHolder.hasConnection() || conHolder.isSynchronizedWithTransaction())) {
 			conHolder.requested();
